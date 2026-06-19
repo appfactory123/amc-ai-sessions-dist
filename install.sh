@@ -8,9 +8,8 @@
 #
 # Installs the app to /Applications, provisions a data dir (~/.claude-sessions)
 # with the bot + support files, and installs every runtime library (Node deps
-# via Bun, Python cryptography/tls-client, nodriver on python3.13 for the
-# ChatGPT browser-send daemon, Google Chrome, and the Claude + Codex CLIs the
-# auto-reply bot drives). Unsigned: the app's quarantine flag is stripped so
+# via Bun, Python cryptography/tls-client, Google Chrome, and the Claude + Codex
+# CLIs the auto-reply bot drives). Unsigned: the app's quarantine flag is stripped so
 # Gatekeeper doesn't block it. Safe to re-run.
 #
 # Developers can instead pull an unreleased build from the PRIVATE source repo
@@ -255,19 +254,18 @@ else
   warn "Grant Accessibility + Screen Recording to the app (System Settings → Privacy & Security) for mouse/screen control."
 fi
 
-# ── Google Chrome (WhatsApp bot via Puppeteer + ChatGPT browser-send) ─
-# nodriver drives the installed Google Chrome to send chatgpt.com messages
-# (headless is blocked by Cloudflare Turnstile), and the WhatsApp bot needs it
-# for Puppeteer. Best-effort install via Homebrew cask; warn if unavailable.
+# ── Google Chrome (WhatsApp bot via Puppeteer) ─
+# The WhatsApp bot needs Chrome for Puppeteer. Best-effort install via Homebrew
+# cask; warn if unavailable.
 step "Google Chrome"
 if [ -d "/Applications/Google Chrome.app" ]; then
   ok "Google Chrome installed"
 elif command -v brew >/dev/null 2>&1; then
   warn "Google Chrome not found — installing via Homebrew…"
   brew install --cask google-chrome >/dev/null 2>&1 && ok "Google Chrome installed" \
-    || warn "install failed — install manually (https://www.google.com/chrome/); needed for the WhatsApp bot and ChatGPT send."
+    || warn "install failed — install manually (https://www.google.com/chrome/); needed for the WhatsApp bot."
 else
-  warn "Google Chrome not found — install it (https://www.google.com/chrome/); needed for the WhatsApp bot and ChatGPT send."
+  warn "Google Chrome not found — install it (https://www.google.com/chrome/); needed for the WhatsApp bot."
 fi
 
 # ── Detect-and-warn: Claude Desktop ─────────────────────
