@@ -217,6 +217,44 @@ else
   warn "codex not found and npm unavailable — install Node, then: npm install -g @openai/codex"
 fi
 
+# ── Computer-control MCP server (mouse / keyboard / screen) ─
+# Registers the local MCP server (scripts/computer-mcp/server.mjs — shipped in the
+# support bundle; its Node deps were installed by setup.command above) with both
+# CLIs at user/global scope, so the in-app agents (and interactive claude/codex)
+# can drive the desktop. Best-effort: skip a CLI that isn't installed. The server
+# resolves its deps from $DATA_DIR/node_modules, so it must run by absolute path.
+step "Computer-control MCP server"
+MCP_SERVER="$DATA_DIR/scripts/computer-mcp/server.mjs"
+MCP_NODE="$(command -v node || echo node)"
+if [ ! -f "$MCP_SERVER" ]; then
+  warn "server.mjs not in support bundle — skipping MCP registration"
+elif [ ! -d "$DATA_DIR/node_modules/@nut-tree-fork/nut-js" ]; then
+  warn "MCP Node deps missing — re-run setup.command, then register manually"
+else
+  if command -v claude >/dev/null 2>&1; then
+    claude mcp remove -s user computer_control >/dev/null 2>&1 || true
+    # -e is variadic: keep -s after the env value so the list ends before the name.
+    if claude mcp add -e ELECTRON_RUN_AS_NODE=1 -s user computer_control -- "$MCP_NODE" "$MCP_SERVER" >/dev/null 2>&1; then
+      ok "registered with Claude"
+    else
+      warn "could not register with Claude"
+    fi
+  else
+    warn "claude CLI missing — skipped Claude MCP registration"
+  fi
+  if command -v codex >/dev/null 2>&1; then
+    codex mcp remove computer_control >/dev/null 2>&1 || true
+    if codex mcp add --env ELECTRON_RUN_AS_NODE=1 computer_control -- "$MCP_NODE" "$MCP_SERVER" >/dev/null 2>&1; then
+      ok "registered with Codex"
+    else
+      warn "could not register with Codex"
+    fi
+  else
+    warn "codex CLI missing — skipped Codex MCP registration"
+  fi
+  warn "Grant Accessibility + Screen Recording to the app (System Settings → Privacy & Security) for mouse/screen control."
+fi
+
 # ── Google Chrome (WhatsApp bot via Puppeteer + ChatGPT browser-send) ─
 # nodriver drives the installed Google Chrome to send chatgpt.com messages
 # (headless is blocked by Cloudflare Turnstile), and the WhatsApp bot needs it
