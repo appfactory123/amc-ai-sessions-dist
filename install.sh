@@ -74,14 +74,16 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 # Resolve the release and its assets (skipped entirely in local mode).
-#   • Default (no token): anonymous request to the PUBLIC dist repo; each asset
-#     is downloaded from its public `browser_download_url`.
+#   • Default (no token): resolve the PUBLIC dist repo's latest release through
+#     the normal GitHub release redirect, then download assets from deterministic
+#     public release URLs. This avoids anonymous GitHub API rate limits.
 #   • Token present: authenticated request to the PRIVATE source repo; the
 #     release JSON lists each asset with a numeric id, downloaded from the assets
 #     endpoint with `Accept: application/octet-stream` (the browser_download_url
 #     404s for private repos).
 REL_JSON=""
 SOURCE_REPO="$PUBLIC_REPO"
+TAG=""
 if [ -z "${CLAUDE_SESSIONS_LOCAL_DIR:-}" ]; then
   step "Locating release"
   REF="latest"
@@ -93,13 +95,19 @@ if [ -z "${CLAUDE_SESSIONS_LOCAL_DIR:-}" ]; then
       -H "Accept: application/vnd.github+json" \
       "https://api.github.com/repos/${REPO}/releases/${REF}")" \
       || die "Could not fetch the release from ${REPO} (bad token, no read access, or no release published yet)."
+    TAG="$(printf '%s' "$REL_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/')"
   else
-    REL_JSON="$(curl -fsSL \
-      -H "Accept: application/vnd.github+json" \
-      "https://api.github.com/repos/${PUBLIC_REPO}/releases/${REF}")" \
-      || die "Could not fetch the release from ${PUBLIC_REPO} (no release published yet, or repo not public)."
+    if [ -n "${CLAUDE_SESSIONS_VERSION:-}" ]; then
+      TAG="$CLAUDE_SESSIONS_VERSION"
+    else
+      LATEST_URL="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+        "https://github.com/${PUBLIC_REPO}/releases/latest")" \
+        || die "Could not resolve the latest release from ${PUBLIC_REPO}."
+      TAG="${LATEST_URL##*/}"
+      [ -n "$TAG" ] && [ "$TAG" != "latest" ] \
+        || die "Could not resolve the latest release tag from ${PUBLIC_REPO}."
+    fi
   fi
-  TAG="$(printf '%s' "$REL_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/')"
   ok "release ${TAG:-?} (${SOURCE_REPO})"
 fi
 
@@ -142,8 +150,7 @@ dl() {
       "https://api.github.com/repos/${REPO}/releases/assets/${id}" -o "$dest" \
       || die "download failed: $name"
   else
-    url="$(asset_url "$name")"
-    [ -n "$url" ] || die "release ${TAG:-?} has no asset named $name"
+    url="https://github.com/${PUBLIC_REPO}/releases/download/${TAG}/${name}"
     curl -fL --progress-bar "$url" -o "$dest" \
       || die "download failed: $name"
   fi
