@@ -8,8 +8,8 @@
 #
 # Installs the app to /Applications, provisions a data dir (~/.claude-sessions)
 # with the bot + support files, and installs every runtime library (Node deps
-# via Bun, Python cryptography/tls-client, Google Chrome, and the Claude + Codex
-# CLIs the auto-reply bot drives). Unsigned: the app's quarantine flag is stripped so
+# via Bun, Python cryptography/tls-client/openai-whisper, ffmpeg, Google Chrome,
+# and the Claude + Codex CLIs the auto-reply bot drives). Unsigned: the app's quarantine flag is stripped so
 # Gatekeeper doesn't block it. Safe to re-run.
 #
 # Developers can instead pull an unreleased build from the PRIVATE source repo
