@@ -1,12 +1,12 @@
 #!/bin/bash
-# AMC AI Sessions — installer (public distribution, no token needed).
+# Cortex — installer (public distribution, no token needed).
 #
 # By default this downloads the prebuilt .app anonymously from the PUBLIC
 # distribution repo's latest GitHub Release — no GitHub token required:
 #
 #   curl -fsSL https://raw.githubusercontent.com/appfactory123/amc-ai-sessions-dist/main/install.sh | bash
 #
-# Installs the app to /Applications, provisions a data dir (~/.claude-sessions)
+# Installs the app to /Applications, provisions a data dir (~/.cortex-ai-sessions)
 # with the bot + support files, and installs every runtime library (Node deps
 # via Bun, Python cryptography/tls-client/openai-whisper, ffmpeg, Google Chrome,
 # and the Claude + Codex CLIs the auto-reply bot drives). Unsigned: the app's quarantine flag is stripped so
@@ -18,23 +18,23 @@
 # API rather than the public dist repo.
 #
 # Overrides (env):
-#   GH_TOKEN / GITHUB_TOKEN / CLAUDE_SESSIONS_TOKEN   token → pull from PRIVATE
+#   GH_TOKEN / GITHUB_TOKEN / CORTEX_TOKEN   token → pull from PRIVATE
 #                              source repo (optional; default is tokenless public).
-#   CLAUDE_SESSIONS_PUBLIC_REPO  override the public dist repo (owner/name).
-#   CLAUDE_SESSIONS_VERSION    pin a release tag (default: latest)
-#   CLAUDE_SESSIONS_LOCAL_DIR  install from local artifacts in this dir instead
-#                              of downloading (expects Claude-Sessions-<arch>.zip
+#   CORTEX_PUBLIC_REPO  override the public dist repo (owner/name).
+#   CORTEX_VERSION    pin a release tag (default: latest)
+#   CORTEX_LOCAL_DIR  install from local artifacts in this dir instead
+#                              of downloading (expects Cortex-<arch>.zip
 #                              and support.tar.gz) — for testing; no token needed.
 
 set -euo pipefail
 
 REPO="appfactory123/claude-sessions"
-PUBLIC_REPO="${CLAUDE_SESSIONS_PUBLIC_REPO:-appfactory123/amc-ai-sessions-dist}"
-APP_NAME="AMC AI Sessions"
+PUBLIC_REPO="${CORTEX_PUBLIC_REPO:-appfactory123/amc-ai-sessions-dist}"
+APP_NAME="Cortex"
 APP_PATH="/Applications/${APP_NAME}.app"
-DATA_DIR="$HOME/.claude-sessions"
-CONFIG="$HOME/.claude-sessions.env"
-TOKEN="${CLAUDE_SESSIONS_TOKEN:-${GH_TOKEN:-${GITHUB_TOKEN:-}}}"
+DATA_DIR="$HOME/.cortex-ai-sessions"
+CONFIG="$HOME/.cortex-ai-sessions.env"
+TOKEN="${CORTEX_TOKEN:-${GH_TOKEN:-${GITHUB_TOKEN:-}}}"
 
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }
@@ -106,7 +106,7 @@ else
   export PATH="$HOME/.bun/bin:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 fi
 
-echo "AMC AI Sessions — installer"
+echo "Cortex — installer"
 
 # ── Preflight ───────────────────────────────────────────
 step "Preflight"
@@ -118,7 +118,7 @@ case "$(uname -m)" in
 esac
 ok "macOS / $ARCH"
 
-APP_ZIP="Claude-Sessions-${ARCH}.zip"
+APP_ZIP="Cortex-${ARCH}.zip"
 SUPPORT_TAR="support.tar.gz"
 
 WORK="$(mktemp -d)"
@@ -135,10 +135,10 @@ trap 'rm -rf "$WORK"' EXIT
 REL_JSON=""
 SOURCE_REPO="$PUBLIC_REPO"
 TAG=""
-if [ -z "${CLAUDE_SESSIONS_LOCAL_DIR:-}" ]; then
+if [ -z "${CORTEX_LOCAL_DIR:-}" ]; then
   step "Locating release"
   REF="latest"
-  [ -n "${CLAUDE_SESSIONS_VERSION:-}" ] && REF="tags/${CLAUDE_SESSIONS_VERSION}"
+  [ -n "${CORTEX_VERSION:-}" ] && REF="tags/${CORTEX_VERSION}"
   if [ -n "$TOKEN" ]; then
     SOURCE_REPO="$REPO"
     REL_JSON="$(curl -fsSL \
@@ -148,8 +148,8 @@ if [ -z "${CLAUDE_SESSIONS_LOCAL_DIR:-}" ]; then
       || die "Could not fetch the release from ${REPO} (bad token, no read access, or no release published yet)."
     TAG="$(printf '%s' "$REL_JSON" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/')"
   else
-    if [ -n "${CLAUDE_SESSIONS_VERSION:-}" ]; then
-      TAG="$CLAUDE_SESSIONS_VERSION"
+    if [ -n "${CORTEX_VERSION:-}" ]; then
+      TAG="$CORTEX_VERSION"
     else
       LATEST_URL="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
         "https://github.com/${PUBLIC_REPO}/releases/latest")" \
@@ -189,9 +189,9 @@ asset_url() {
 # download, or private authenticated download depending on mode).
 dl() {
   local name="$1" dest="$2" id url
-  if [ -n "${CLAUDE_SESSIONS_LOCAL_DIR:-}" ]; then
-    cp "$CLAUDE_SESSIONS_LOCAL_DIR/$name" "$dest" \
-      || die "missing local artifact: $CLAUDE_SESSIONS_LOCAL_DIR/$name"
+  if [ -n "${CORTEX_LOCAL_DIR:-}" ]; then
+    cp "$CORTEX_LOCAL_DIR/$name" "$dest" \
+      || die "missing local artifact: $CORTEX_LOCAL_DIR/$name"
   elif [ -n "$TOKEN" ]; then
     id="$(asset_id "$name")"
     [ -n "$id" ] || die "release ${TAG:-?} has no asset named $name"
@@ -251,7 +251,7 @@ fi
 
 # ── Delegate Node + Python deps + config to setup.command ─
 # setup.command (run from the data dir) installs Node deps via bun, installs the
-# Python libs, and writes ~/.claude-sessions.env → the data dir. Reusing it keeps
+# Python libs, and writes ~/.cortex-ai-sessions.env → the data dir. Reusing it keeps
 # dependency logic in one place.
 step "Dependencies (delegating to setup.command)"
 ( cd "$DATA_DIR" && bash setup.command ) || warn "setup.command reported problems (see above)"
