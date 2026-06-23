@@ -41,6 +41,57 @@ warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }
 step() { printf '\n\033[1m▶ %s\033[0m\n' "$1"; }
 die()  { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 
+app_executable_pattern() {
+  printf '%s/Contents/MacOS/%s' "$APP_PATH" "$APP_NAME"
+}
+
+app_pids() {
+  pgrep -f "$(app_executable_pattern)" 2>/dev/null || true
+}
+
+refresh_launchservices() {
+  local action="$1"
+  local lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+  [ -x "$lsregister" ] || return 0
+  case "$action" in
+    unregister) [ -d "$APP_PATH" ] && "$lsregister" -u "$APP_PATH" >/dev/null 2>&1 || true ;;
+    register)   [ -d "$APP_PATH" ] && "$lsregister" -f "$APP_PATH" >/dev/null 2>&1 || true ;;
+  esac
+}
+
+quit_running_app() {
+  local pids bundle_id
+  pids="$(app_pids)"
+  [ -n "$pids" ] || return 0
+
+  warn "${APP_NAME} is running — quitting it before replacing the app bundle"
+  bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist" 2>/dev/null || true)"
+  if [ -n "$bundle_id" ]; then
+    osascript -e "tell application id \"$bundle_id\" to quit" >/dev/null 2>&1 || true
+  else
+    osascript -e "tell application \"$APP_NAME\" to quit" >/dev/null 2>&1 || true
+  fi
+
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    [ -z "$(app_pids)" ] && { ok "stopped running app"; return 0; }
+    sleep 0.5
+  done
+
+  warn "app did not quit in time — stopping the old installed executable"
+  pkill -TERM -f "$(app_executable_pattern)" >/dev/null 2>&1 || true
+  sleep 1
+  if [ -n "$(app_pids)" ]; then
+    pkill -KILL -f "$(app_executable_pattern)" >/dev/null 2>&1 || true
+  fi
+  [ -z "$(app_pids)" ] && ok "stopped running app" || warn "old app process may still be running"
+}
+
+installed_build_tag() {
+  local vf="$APP_PATH/Contents/Resources/standalone/version.json"
+  [ -f "$vf" ] || return 0
+  awk -F'"' '/"tag":[[:space:]]*"/ { print $4; exit }' "$vf"
+}
+
 # Resolve the login-shell PATH so Bun/conda/pyenv are found even when this runs
 # piped from curl (a non-interactive, minimal-PATH shell). Mirrors setup.command.
 # -ilc sources rc files so PATH matches a real terminal, but those (and macOS
@@ -163,9 +214,18 @@ ok "downloaded $APP_ZIP"
 ditto -x -k "$WORK/$APP_ZIP" "$WORK/app" || die "could not unzip $APP_ZIP"
 SRC_APP="$(find "$WORK/app" -maxdepth 2 -name '*.app' -type d | head -n1)"
 [ -n "$SRC_APP" ] || die "no .app found inside $APP_ZIP"
+quit_running_app
+refresh_launchservices unregister
 rm -rf "$APP_PATH"
 mv "$SRC_APP" "$APP_PATH" || die "could not move app to /Applications (permissions?)"
 ok "installed → $APP_PATH"
+refresh_launchservices register
+INSTALLED_TAG="$(installed_build_tag)"
+if [ -n "$INSTALLED_TAG" ]; then
+  ok "installed build ${INSTALLED_TAG}"
+elif [ -n "$TAG" ]; then
+  warn "could not read bundled build tag; expected release ${TAG}"
+fi
 # Unsigned build: clear the quarantine flag so Gatekeeper doesn't block launch.
 xattr -dr com.apple.quarantine "$APP_PATH" 2>/dev/null && ok "cleared quarantine" \
   || warn "could not clear quarantine — right-click → Open on first launch"
